@@ -153,7 +153,7 @@ class SPIFlash:
 
     def page_program(self, address, data_write = bytearray()):
         # if we're passed a bytes object, this will work
-        to_write = bytearray(data_write)
+        towrite = bytearray(data_write)
         self.write_enable()
         towrite.insert(0,(address & 0xFF))
         towrite.insert(0,((address>>8) & 0xFF))
