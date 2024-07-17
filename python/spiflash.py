@@ -226,6 +226,7 @@ class SPIFlash:
             trials = trials + 1
         print("Erase complete after %d trials." % trials)
 
+    # these don't matter, don't worry about these
     def write_bank_address(self, bank):
         if self.memory_capacity > 2**24:
             return
