@@ -86,7 +86,7 @@ class SPIFlash:
             if not res & 0x2:
                 trials = trials + 1
             else:
-                print("Write enable succeeded (%d)." % res)
+                print("Write enable succeeded (%d) after %d trials." % (res, trials))
                 break
 
     def write_disable(self):
@@ -193,6 +193,16 @@ class SPIFlash:
         trials = 0
         while trials < 10:
             res = self.status()
+            # Before the erase command, we know that the bottom 2 bits
+            # are 0b10.
+            # After the erase command is issued, we can have:
+            # -> 00   (sector erase completed)
+            # -> 11   (sector erase in progress)
+            # So we look for EITHER bit 2 NOT set or bit 1 set
+            # If both of them are clear, it'll jump through the
+            # erase complete right away.
+            if not (res & 0x2):
+                break
             if res & 0x1:
                 break
         print("Erase started. Waiting for erase complete...")
