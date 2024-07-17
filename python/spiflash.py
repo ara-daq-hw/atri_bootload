@@ -152,22 +152,31 @@ class SPIFlash:
         print("Complete!")
 
     def page_program(self, address, data_write = bytearray()):
+        # if we're passed a bytes object, this will work
+        to_write = bytearray(data_write)
         self.write_enable()
-        data_write.insert(0,(address & 0xFF))
-        data_write.insert(0,((address>>8) & 0xFF))
-        data_write.insert(0,((address>>16) & 0xFF))
+        towrite.insert(0,(address & 0xFF))
+        towrite.insert(0,((address>>8) & 0xFF))
+        towrite.insert(0,((address>>16) & 0xFF))
         if self.memory_capacity > 2**24:
-            data_write.insert(0,((address>>24) & 0xFF))
-            self.dev.command(self.cmd["4PP"],0,0,data_write)
+            towrite.insert(0,((address>>24) & 0xFF))
+            self.dev.command(self.cmd["4PP"],0,0,towrite)
         else:
-            self.dev.command(self.cmd["3PP"],0,0,data_write)
+            self.dev.command(self.cmd["3PP"],0,0,towrite)
         res = self.status()
         trials = 0
         while trials < 10:
             res = self.status()
+            # same deal as before
+            if not (res & 0x2):
+                break
             if res & 0x1:
                 break
             trials = trials + 1
+        if trials == 10:
+            print("START TIMED OUT!!")
+            self.write_disable()
+            return
         trials = 0
         while res & 0x1:
             res = self.status()
@@ -193,6 +202,7 @@ class SPIFlash:
         trials = 0
         while trials < 10:
             res = self.status()
+            trials = trials + 1
             # Before the erase command, we know that the bottom 2 bits
             # are 0b10.
             # After the erase command is issued, we can have:
@@ -205,6 +215,10 @@ class SPIFlash:
                 break
             if res & 0x1:
                 break
+        if trials == 10:
+            print("START TIMED OUT!!")
+            self.write_disable()
+            return
         print("Erase started. Waiting for erase complete...")
         trials = 0
         while res & 0x1:
