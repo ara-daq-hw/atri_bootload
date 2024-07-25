@@ -139,7 +139,7 @@ class SPIFlash:
         for seg in f.segments:
             start = seg.start_address
             end = 0
-            while start < seg.size:
+            while start < seg.size + seg.start_address:
                 end = start + page_size
                 if end > seg.end_address:
                     end = seg.end_address
