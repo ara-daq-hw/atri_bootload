@@ -9,9 +9,7 @@ driver. When present you see two device files at the moment:
 
 * /dev/xillybus_spi_in - takes data going TO the SPI device
 * /dev/xillybus_spi_out - received data FROM the SPI device
-
-A third will be added (/dev/xillybus_icap_in) shortly to add
-the reboot functionality.
+* /dev/xillybus_icap_in - takes data going TO ICAP
 
 There will be a basic Python interface to this firmware added
 soon, but the overall interface is easy. The chip is selected
