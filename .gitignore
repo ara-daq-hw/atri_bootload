@@ -1,0 +1,11 @@
+# ignore working
+working/
+# ignore iseconfig
+iseconfig/
+# ignore impact-y stuff
+_impact.cmd
+_impact.log
+# ignore timing reports
+*.twx
+# ignore backups
+*~
