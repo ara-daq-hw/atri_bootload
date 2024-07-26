@@ -1,0 +1,7 @@
+# ignore everything by default
+*
+# don't ignore directories
+!*/
+# don't ignore gitignore and xco files
+!.gitignore
+!*.xco
