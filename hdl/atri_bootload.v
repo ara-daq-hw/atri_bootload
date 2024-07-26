@@ -19,6 +19,8 @@ module atri_bootload(
 				output [4:0] MON
 		     );
 
+	localparam DEBUG = "NONE";
+
 	wire clk;
 
       
@@ -80,6 +82,40 @@ module atri_bootload(
 									.dout(user_spiout_data),
 									.rd_en(user_spiout_rden),
 									.empty(user_spiout_empty));
+									
+	// this is the ICAP fifo, coming from xilly
+	// the way the ICAP stuff works is that you write data
+	// to it, then when you close AND QUIESCE IT
+	// the contents of the FIFO get dumped into ICAP.
+	wire [15:0] user_icap_in_data;
+	wire		  user_icap_in_wren;
+	wire		  user_icap_in_full;
+	wire		  icap_in_open;
+	// reset always happens the first clock of open.
+	reg 		  icap_open_rereg = 0;
+	// going to ICAP
+	wire [15:0] icap_fifo_data;
+	wire		  icap_fifo_valid;
+	wire		  icap_fifo_empty;
+	
+	// this is also the write input to ICAP
+	// this is icap_fifo_valid && !icap_fifo_empty && quiesce
+	reg		  icap_fifo_do_read = 0;	
+	wire		  icap_fifo_read = icap_fifo_do_read && icap_fifo_valid;
+	
+	xilly_infifo16 u_icapfifo(.clk(clk),
+									.srst(!icap_open_rereg && icap_in_open),
+									.din(user_icap_in_data),
+									.wr_en(user_icap_in_wren),
+									.full(user_icap_in_full),
+									.dout(icap_fifo_data),
+									.valid(icap_fifo_valid),
+									.empty(icap_fifo_empty),
+									.rd_en(icap_fifo_read));
+	ICAP_SPARTAN6 u_icap(.CLK(clk),
+								.CE(~icap_fifo_read),
+								.WRITE(~icap_fifo_read),
+								.I(icap_fifo_data));
 	
    reg 	spi_cs = 0;
    (* IOB = "TRUE" *)
@@ -135,6 +171,11 @@ module atri_bootload(
 				 .user_r_spi_out_data(user_spiout_data),
 				 .user_r_spi_out_open(spi_out_open),
 				 .user_r_spi_out_eof(1'b0),
+				 // CPU to ICAP
+				 .user_w_icap_in_full(user_icap_in_full),
+				 .user_w_icap_in_wren(user_icap_in_wren),
+				 .user_w_icap_in_data(user_icap_in_data),
+				 .user_w_icap_in_open(icap_in_open),
 				 // bus clk
 				 .bus_clk(clk),
 				 .quiesce(quiesce));
@@ -143,7 +184,15 @@ module atri_bootload(
 	assign spi_in_read = spi_in_valid && (state == ACCEPT);
 	assign spi_out_write = !spi_out_full && (state == FINISH); 
 	
+	reg [3:0] toggle = {4{1'b0}};	
+	
    always @(posedge clk) begin
+		toggle <= toggle[2:0] + 1;
+		
+		icap_open_rereg <= icap_in_open;
+
+		icap_fifo_do_read <= icap_fifo_valid && !icap_fifo_empty && quiesce;		
+		
       spi_cs <= spi_in_open && spi_out_open;
 		spi_cs_debug <= spi_in_open && spi_out_open;
 		
@@ -230,21 +279,39 @@ module atri_bootload(
 			spi_bit_counter <= spi_bit_counter + 1;
    end
 
-	wire [35:0] ila_to_icon;
-	chipscope_icon u_icon(.CONTROL0(ila_to_icon));
-	chipscope_ila u_ila(.CONTROL(ila_to_icon),
-							  .CLK(clk),
-							  .TRIG0(spi_in_data),
-							  .TRIG1(spi_in_read),
-							  .TRIG2(spi_out_reg),
-							  .TRIG3(spi_out_write),
-							  .TRIG4(state),
-							  .TRIG5(spi_cs_debug),
-							  .TRIG6(spi_cclk_debug),
-							  .TRIG7(spi_mosi_debug),
-							  .TRIG8(spi_miso));
-
-	assign MON[4] = !quiesce;
+	generate
+		if (DEBUG != "NONE" && DEBUG != "FALSE") begin : DBG
+			wire [35:0] ila_to_icon;
+			chipscope_icon u_icon(.CONTROL0(ila_to_icon));
+			if (DEBUG == "SPI") begin : SPI
+				chipscope_ila u_ila(.CONTROL(ila_to_icon),
+										  .CLK(clk),
+										  .TRIG0(spi_in_data),
+										  .TRIG1(spi_in_read),
+										  .TRIG2(spi_out_reg),
+										  .TRIG3(spi_out_write),
+										  .TRIG4(state),
+										  .TRIG5(spi_cs_debug),
+										  .TRIG6(spi_cclk_debug),
+										  .TRIG7(spi_mosi_debug),
+										  .TRIG8(spi_miso));
+			end else begin : ICAP
+				chipscope_ila u_ila(.CONTROL(ila_to_icon),
+										  .CLK(clk),
+										  .TRIG0(icap_fifo_data[7:0]),
+										  .TRIG1(icap_fifo_valid),
+										  .TRIG2(icap_fifo_data[15:8]),
+										  .TRIG3(icap_fifo_read),
+										  .TRIG4(state),
+										  .TRIG5(quiesce),
+										  .TRIG6(icap_in_open),
+										  .TRIG7(icap_fifo_empty),
+										  .TRIG8(spi_miso));
+			end
+		end
+	endgenerate
+	
+	assign MON[4] = toggle[3];
 	assign MON[3] = spi_in_open;
 	assign MON[2] = spi_out_open;
 	assign MON[1] = spi_miso;
